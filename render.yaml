@@ -1,0 +1,40 @@
+# Деплой на Render — БЕСПЛАТНО. Два варианта в одном Blueprint:
+#
+# ВАРИАНТ A (рекомендуется): фоновый worker = мгновенные push.
+#   Бесплатно только на trial (первые ~750 часов), после — $1/мес (free plan для
+#   background worker недоступен). Раскомментируйте блок ниже.
+#
+# ВАРИАНТ B (гарантированно $0 навсегда): бесплатный веб-сервис + бесплатный cron
+#   (cron-job.org бьёт по POST /flush каждую минуту). Работает «из коробки».
+
+services:
+  - type: web
+    name: kotlinmassage-relay
+    runtime: docker
+    plan: free
+    rootDir: .
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: MODE
+        value: web
+      - key: FLUSH_TOKEN
+        generateValue: true          # сгенерировать при деплое
+      - key: FIREBASE_DATABASE_URL
+        value: https://kotlinmassage-default-rtdb.firebaseio.com
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false                  # вставить JSON ключа вручную в дашборде (Secret)
+  # - type: background_worker        # ВАРИАНТ A — раскомментировать
+  #   name: kotlinmassage-relay-worker
+  #   runtime: docker
+  #   rootDir: .
+  #   region: oregon
+  #   envVars:
+  #     - key: MODE
+  #       value: worker
+  #     - key: FLUSH_TOKEN
+  #       generateValue: true
+  #     - key: FIREBASE_DATABASE_URL
+  #       value: https://kotlinmassage-default-rtdb.firebaseio.com
+  #     - key: FIREBASE_SERVICE_ACCOUNT
+  #       sync: false

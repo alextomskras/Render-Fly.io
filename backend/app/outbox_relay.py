@@ -15,10 +15,15 @@ def process_outbox_once(max_age_seconds: int = 3600) -> int:
     """Один проход по outbox. Возвращает количество обработанных сообщений."""
     ref = get_db()
     outbox = ref.child("outbox")
-    pending = outbox.get(
-        # берём только ещё не отправленные
-        shallow=False,
-    ) or {}
+    try:
+        pending = outbox.get(shallow=False) or {}
+    except Exception as e:
+        # если узла outbox ещё нет в базе (клиент ничего не писал) — не ошибка,
+        # а просто нечего обрабатывать; Firebase REST отдаёт 404 на несуществующий путь
+        code = getattr(getattr(e, "http_error", None), "code", None)
+        if code == 404 or "404" in str(e):
+            return 0
+        raise
 
     processed = 0
     now_ms = int(time.time() * 1000)

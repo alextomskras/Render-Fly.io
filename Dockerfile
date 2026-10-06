@@ -1,8 +1,8 @@
 FROM python:3.12-slim
 WORKDIR /app
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app/ app/
+COPY backend/app/ app/
 # Режим релея задаётся переменной окружения на площадке:
 #   worker  -> стриминг-подписка на outbox (Render background worker, Fly process)
 #   web     -> FastAPI + внешний cron на POST /flush (Render free web service)

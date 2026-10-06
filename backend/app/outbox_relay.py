@@ -34,6 +34,11 @@ def process_outbox_once(max_age_seconds: int = 3600) -> int:
         if msg.get("sent"):
             continue
         ts = msg.get("timestamp") or 0
+        # клиент пишет timestamp в СЕКУНДАХ (System.currentTimeMillis()/1000) —
+        # нормализуем к миллисекундам, иначе любое живое сообщение считалось
+        # "протухшим" и молча помечалось skipped=expired без отправки пуша
+        if ts < 10_000_000_000:
+            ts *= 1000
         if now_ms - ts > max_age_seconds * 1000:
             outbox.child(msg_id).update({"sent": True, "skipped": "expired"})
             continue
@@ -80,7 +85,7 @@ def send_push(recipient_uid: str, msg: dict) -> bool:
         return False
 
     # в базе поле текста называется text (см. model/ChatMessage.kt)
-    body = msg.get("text") or msg.get("message") or ""
+    body = msg.get("preview") or msg.get("text") or msg.get("message") or ""
     if msg.get("msgType") == "IMAGE":
         body = "📷 Фото"
     title = msg.get("senderName") or msg.get("username") or "Новое сообщение"

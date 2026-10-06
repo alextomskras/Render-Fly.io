@@ -3,3 +3,8 @@ __pycache__/
 .env
 serviceAccount*.json
 credentials/
+
+# Secrets (never commit)
+.env
+serviceAccount*.json
+credentials/

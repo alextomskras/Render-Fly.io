@@ -1,0 +1,13 @@
+# Шаблон: fly launch создаст свой fly.toml, этот — как ориентир для worker-деплоя
+app = "kotlinmassage-relay"
+primary_region = "waw"
+
+[build]
+  python_version = "3.12"
+
+[processes]
+  # мгновенный релей вместо web-сервиса:
+  app = "python -m app.worker"
+
+# секреты задавать через: fly secrets set FIREBASE_SERVICE_ACCOUNT='<json>' \
+#        FIREBASE_DATABASE_URL='https://kotlinmassage-default-rtdb.firebaseio.com'

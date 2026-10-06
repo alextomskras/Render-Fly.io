@@ -12,8 +12,11 @@ from firebase_admin import credentials, db
 
 
 def init_firebase() -> None:
-    if firebase_admin.get_app():  # уже инициализирован
+    try:
+        firebase_admin.get_app()  # уже инициализирован
         return
+    except ValueError:
+        pass  # default app ещё нет — идём инициализировать
 
     sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
     if sa_json:

@@ -56,12 +56,28 @@ def process_outbox_once(max_age_seconds: int = 86400 * 365) -> int:
             outbox.child(msg_id).update({"sent": True, "skipped": "malformed"})
             continue
 
-        # находим uid получателя по username
+        # находим uid получателя по username.
+        # Вариант 1: order_by_child требует индекса на users.username и правил —
+        # без них REST отдаёт 404, и раньше это молча давало no-recipient для ВСЕХ.
+        # Поэтому пробуем запрос, а при любой ошибке падаем на вариант 2:
+        # прямое чтение узла users (Admin SDK обходит правила) и поиск по имени.
         recipient_uid = None
-        user_node = ref.child("users").order_by_child("username") \
-            .equal_to(to_username).limit_to_first(1).get()
-        if user_node:
-            recipient_uid = next(iter(user_node.keys()))
+        try:
+            user_node = ref.child("users").order_by_child("username") \
+                .equal_to(to_username).limit_to_first(1).get()
+            if user_node:
+                recipient_uid = next(iter(user_node.keys()))
+        except Exception as e:
+            print(f"[relay] query by username failed ({e}), fallback to full read")
+        if not recipient_uid:
+            try:
+                all_users = ref.child("users").get() or {}
+            except Exception:
+                all_users = {}
+            for uid, u in all_users.items():
+                if isinstance(u, dict) and u.get("username") == to_username:
+                    recipient_uid = uid
+                    break
         if not recipient_uid:
             # помечаем: пользователь не найден, повторять бессмысленно
             report.append({"id": msg_id, "to": to_username, "result": "no-recipient"})

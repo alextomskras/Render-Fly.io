@@ -88,14 +88,13 @@ def process_outbox_once(max_age_seconds: int = 86400 * 365) -> int:
         report.append({"id": msg_id, "to": to_username,
                        "result": "sent" if sent_ok else "NO_TOKENS_OR_SEND_FAILED"})
 
-        # записываем статус в зеркало собеседника, чтобы клиент видел "доставлено"
-        status_path = f"user-messages/{recipient_uid}/{from_uid}/{msg_id}/delivered"
-        try:
-            if sent_ok:
-                ref.child(status_path).set(True)
-        except Exception:
-            pass
-        outbox.child(msg_id).update({"sent": True})
+        # ВАЖНО: раньше здесь писался флаг delivered в user-messages получателя.
+        # Релей пишет по admin-правам, минуя правила БД, и если id сообщения в
+        # outbox не совпадал с id зеркала (или зеркала ещё нет), создавался
+        # ОДИНОКИЙ узел {"delivered": true} без text/timestamp -> клиент рисовал
+        # пустое сообщение с датой 01-01-1970. Статус доставки храним только в
+        # outbox (поле push_sent), зеркало чата клиенту не трогаем.
+        outbox.child(msg_id).update({"sent": True, "push_sent": bool(sent_ok)})
         processed += 1
 
     process_outbox_once.last_report = report

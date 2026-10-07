@@ -108,7 +108,10 @@ def inspect_outbox(x_flush_token: str = Header(default="")):
         outbox = ref.child("outbox").get() or {}
     except Exception:
         outbox = {}
-    users = ref.child("users").get() or {}
+    try:
+        users = ref.child("users").get() or {}
+    except Exception:
+        users = {}
     by_name = {u.get("username"): uid for uid, u in users.items() if isinstance(u, dict)}
     report = []
     for msg_id, msg in list(outbox.items())[-10:]:

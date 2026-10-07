@@ -98,6 +98,7 @@ def debug_state(x_flush_token: str = Header(default="")):
     return {"count": len(summary), "messages": summary[-50:]}
 
 
+@app.post("/inspect_outbox")
 @app.get("/inspect_outbox")
 def inspect_outbox(x_flush_token: str = Header(default="")):
     """Диагностика цепочки push: outbox-сообщения, uid получателя по username,

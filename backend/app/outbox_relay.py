@@ -159,15 +159,17 @@ def send_push(recipient_uid: str, msg: dict) -> bool:
         ]
     )
     # чистим протухшие токены (только реальные device-id из user-tokens;
-    # legacy-newToken — виртуальный ключ, его не удаляем)
-    failed_indices = [
-        i for i, r in enumerate(response.responses)
-        if not r.success
-    ]
-    for i in failed_indices:
+    # legacy-newToken — виртуальный ключ, его не удаляем).
+    # ВАЖНО: response.responses[i] — это firebase_admin.messaging.SendResponse,
+    # у него НЕТ атрибута .error; исключение лежит в r.exception.
+    # Старый код падал с AttributeError и /flush отдавал 500 на каждом сообщении.
+    for i, r in enumerate(response.responses):
+        if r.success:
+            continue
         did = token_ids[i]
-        err = str(response.responses[i].error)
-        if ("UNREGISTERED" in err or "NotRegistered" in err or "INVALID_ARGUMENT" in err) and did != "legacy-newToken":
+        err = type(r.exception).__name__ + ": " + str(r.exception) if r.exception else "unknown"
+        if ("UNREGISTERED" in err.upper() or "NOTREGISTERED" in err.upper()
+                or "INVALID_ARGUMENT" in err.upper()) and did != "legacy-newToken":
             try:
                 tokens_ref.child(did).delete()
             except Exception:

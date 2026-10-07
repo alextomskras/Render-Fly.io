@@ -21,7 +21,7 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from .firebase_client import init_firebase, get_db
-from .outbox_relay import process_outbox_once, send_push_to_token
+from .outbox_relay import process_outbox_once, send_push_to_token, _collect_tokens
 
 app = FastAPI(title="KotlinMassage Push Relay")
 
@@ -93,6 +93,53 @@ def debug_state(x_flush_token: str = Header(default="")):
             "timestamp": msg.get("timestamp"),
         })
     return {"count": len(summary), "messages": summary[-50:]}
+
+
+@app.get("/inspect_outbox")
+def inspect_outbox(x_flush_token: str = Header(default="")):
+    """Диагностика цепочки push: outbox-сообщения, uid получателя по username,
+    где лежат его токены. Показывает, на каком именно шаге всё ломается."""
+    _check_token(x_flush_token)
+    ref = get_db()
+    try:
+        outbox = ref.child("outbox").get() or {}
+    except Exception:
+        outbox = {}
+    users = ref.child("users").get() or {}
+    by_name = {u.get("username"): uid for uid, u in users.items() if isinstance(u, dict)}
+    report = []
+    for msg_id, msg in list(outbox.items())[-10:]:
+        if not isinstance(msg, dict):
+            continue
+        to_username = msg.get("to")
+        r_uid = by_name.get(to_username)
+        tokens_info = "recipient uid not found"
+        token_sources = []
+        if r_uid:
+            try:
+                ut = ref.child("user-tokens").child(r_uid).get()
+                if ut:
+                    token_sources.append(("user-tokens", len(ut)))
+            except Exception:
+                pass
+            try:
+                uu = ref.child("users").child(r_uid).get() or {}
+                if uu.get("newToken"):
+                    token_sources.append(("users/newToken", 1))
+            except Exception:
+                pass
+            if not token_sources:
+                token_sources.append(("NO TOKENS ANYWHERE", 0))
+        report.append({
+            "id": msg_id,
+            "to": to_username,
+            "recipient_uid": r_uid,
+            "sent": msg.get("sent"),
+            "skipped": msg.get("skipped"),
+            "timestamp": msg.get("timestamp"),
+            "token_sources": token_sources,
+        })
+    return {"pending_or_recent": report}
 
 
 def run_polling_loop(interval: int = 5) -> None:

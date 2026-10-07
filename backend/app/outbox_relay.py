@@ -93,6 +93,7 @@ def send_push(recipient_uid: str, msg: dict) -> bool:
     registration_tokens = [t for t in tokens.values() if t]
     if not registration_tokens:
         return False
+    token_ids = list(tokens.keys())
 
     response = messaging.send_each(
         [
@@ -117,16 +118,20 @@ def send_push(recipient_uid: str, msg: dict) -> bool:
             for t in registration_tokens
         ]
     )
-    # чистим протухшие токены
+    # чистим протухшие токены (только реальные device-id из user-tokens;
+    # legacy-newToken — виртуальный ключ, его не удаляем)
     failed_indices = [
         i for i, r in enumerate(response.responses)
         if not r.success
     ]
     for i in failed_indices:
-        did = list(tokens.keys())[i]
+        did = token_ids[i]
         err = str(response.responses[i].error)
-        if "UNREGISTERED" in err or "INVALID_ARGUMENT" in err:
-            tokens_ref.child(did).delete()
+        if ("UNREGISTERED" in err or "INVALID_ARGUMENT" in err) and did != "legacy-newToken":
+            try:
+                tokens_ref.child(did).delete()
+            except Exception:
+                pass
 
     return response.success_count > 0
 

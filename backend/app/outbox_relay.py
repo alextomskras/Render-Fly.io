@@ -110,7 +110,7 @@ def send_push(recipient_uid: str, msg: dict) -> bool:
                 android=messaging.AndroidConfig(
                     priority="high",
                     notification=messaging.AndroidNotification(
-                        channel_id="chat"
+                        channel_id="messenger_messages_v1"
                     ),
                 ),
             )
@@ -143,7 +143,7 @@ def send_push_to_token(token: str, title: str, body: str) -> dict:
                 data={"fromUsername": title, "debug": "true"},
                 android=messaging.AndroidConfig(
                     priority="high",
-                    notification=messaging.AndroidNotification(channel_id="chat"),
+                    notification=messaging.AndroidNotification(channel_id="messenger_messages_v1"),
                 ),
             )
         )

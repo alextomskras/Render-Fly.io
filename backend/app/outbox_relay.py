@@ -11,8 +11,12 @@ def _get_recipient_uids(ref) -> list[str]:
     return list(users.keys())
 
 
-def process_outbox_once(max_age_seconds: int = 3600) -> int:
-    """Один проход по outbox. Возвращает количество обработанных сообщений."""
+def process_outbox_once(max_age_seconds: int = 86400 * 365) -> int:
+    """Один проход по outbox. Возвращает количество обработанных сообщений.
+
+    max_age_seconds по умолчанию ~1 год: доставляем ВСЕ unsent-сообщения,
+    даже накопленные (для мессенджера «просрочка» не причина терять пуш).
+    """
     ref = get_db()
     outbox = ref.child("outbox")
     try:

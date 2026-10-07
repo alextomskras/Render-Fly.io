@@ -127,7 +127,7 @@ def send_push(recipient_uid: str, msg: dict) -> bool:
     for i in failed_indices:
         did = token_ids[i]
         err = str(response.responses[i].error)
-        if ("UNREGISTERED" in err or "INVALID_ARGUMENT" in err) and did != "legacy-newToken":
+        if ("UNREGISTERED" in err or "NotRegistered" in err or "INVALID_ARGUMENT" in err) and did != "legacy-newToken":
             try:
                 tokens_ref.child(did).delete()
             except Exception:
@@ -156,8 +156,10 @@ def send_push_to_token(token: str, title: str, body: str) -> dict:
     except Exception as e:
         err = str(e)
         hint = ""
-        if "UNREGISTERED" in err:
-            hint = "токен невалиден/приложение удалено или залогинено другим юзером - перелогинься"
+        if "UNREGISTERED" in err or "NotRegistered" in err:
+            hint = ("токен мёртв (legacy GCM-формат или приложение отвязано от FCM). "
+                    "F9 на эмуляторе: удалить аккаунт Google+перелогин. Samsung: перелогин в приложении. "
+                    "После перелогина токен сам перезапишется в user-tokens")
         elif "SENDER_ID_MISMATCH" in err:
             hint = "токен от другого Firebase-проекта"
         elif "API_KEY_NETWORK" in err or "auth" in err.lower():

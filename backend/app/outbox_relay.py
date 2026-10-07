@@ -79,8 +79,21 @@ def send_push(recipient_uid: str, msg: dict) -> bool:
     """Отправка FCM на все токены получателя. Возвращает True, если хотя бы один доставлен."""
     from firebase_admin import messaging
 
-    tokens_ref = get_db().child("user-tokens").child(recipient_uid)
-    tokens = tokens_ref.get() or {}
+    db = get_db()
+    tokens_ref = db.child("user-tokens").child(recipient_uid)
+    try:
+        tokens = tokens_ref.get() or {}
+    except Exception:
+        tokens = {}
+    # fallback: у tt8 живой FCM-токен лежит в users/<uid>/newToken (формат xxx:APA91b...),
+    # а не в user-tokens — раньше из-за этого пуш молча не отправлялся
+    if not tokens:
+        try:
+            legacy = db.child("users").child(recipient_uid).child("newToken").get()
+        except Exception:
+            legacy = None
+        if legacy:
+            tokens = {"legacy-newToken": legacy}
     if not tokens:
         return False
 

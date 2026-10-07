@@ -85,15 +85,15 @@ def send_push(recipient_uid: str, msg: dict) -> bool:
         tokens = tokens_ref.get() or {}
     except Exception:
         tokens = {}
-    # fallback: у tt8 живой FCM-токен лежит в users/<uid>/newToken (формат xxx:APA91b...),
-    # а не в user-tokens — раньше из-за этого пуш молча не отправлялся
-    if not tokens:
-        try:
-            legacy = db.child("users").child(recipient_uid).child("newToken").get()
-        except Exception:
-            legacy = None
-        if legacy:
-            tokens = {"legacy-newToken": legacy}
+    # ВАЖНО: токен может лежать и в user-tokens/<uid>/<deviceId>, И в users/<uid>/newToken
+    # (у tt8 оба есть, у tt7 newToken мёртвый legacy). Берём ВСЕ источники сразу и дедупим,
+    # иначе живые токены теряются (раньше newToken читался только если user-tokens пуст).
+    try:
+        legacy = db.child("users").child(recipient_uid).child("newToken").get()
+    except Exception:
+        legacy = None
+    if legacy and legacy not in set(tokens.values()):
+        tokens["legacy-newToken"] = legacy
     if not tokens:
         return False
 

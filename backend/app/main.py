@@ -21,7 +21,7 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from .firebase_client import init_firebase, get_db
-from .outbox_relay import process_outbox_once, send_push_to_token, _collect_tokens
+from .outbox_relay import process_outbox_once, send_push_to_token
 
 app = FastAPI(title="KotlinMassage Push Relay")
 

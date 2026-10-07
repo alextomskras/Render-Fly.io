@@ -69,7 +69,10 @@ def test_push(req: TestPushRequest, x_flush_token: str = Header(default="")):
 def device_tokens(x_flush_token: str = Header(default="")):
     """Список токенов устройств из user-tokens (для диагностики)."""
     _check_token(x_flush_token)
-    tokens = get_db().child("user-tokens").get() or {}
+    try:
+        tokens = get_db().child("user-tokens").get() or {}
+    except Exception:
+        tokens = {}  # узла ещё нет в БД — это не ошибка
     return {uid: list(devs.values()) for uid, devs in tokens.items()}
 
 

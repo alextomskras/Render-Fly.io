@@ -129,3 +129,32 @@ def send_push(recipient_uid: str, msg: dict) -> bool:
             tokens_ref.child(did).delete()
 
     return response.success_count > 0
+
+
+def send_push_to_token(token: str, title: str, body: str) -> dict:
+    """Прямая отправка FCM на один токен, минуя БД. Для диагностики (/test_push)."""
+    from firebase_admin import messaging
+
+    try:
+        msg_id = messaging.send(
+            messaging.Message(
+                token=token,
+                notification=messaging.Notification(title=title, body=body),
+                data={"fromUsername": title, "debug": "true"},
+                android=messaging.AndroidConfig(
+                    priority="high",
+                    notification=messaging.AndroidNotification(channel_id="chat"),
+                ),
+            )
+        )
+        return {"success": True, "message_id": msg_id}
+    except Exception as e:
+        err = str(e)
+        hint = ""
+        if "UNREGISTERED" in err:
+            hint = "токен невалиден/приложение удалено или залогинено другим юзером - перелогинься"
+        elif "SENDER_ID_MISMATCH" in err:
+            hint = "токен от другого Firebase-проекта"
+        elif "API_KEY_NETWORK" in err or "auth" in err.lower():
+            hint = "проблема с credentials сервера"
+        return {"success": False, "error": err[:500], "hint": hint}

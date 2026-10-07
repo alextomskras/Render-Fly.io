@@ -18,9 +18,10 @@ import threading
 import time
 
 from fastapi import FastAPI, Header, HTTPException
+from pydantic import BaseModel
 
-from .firebase_client import init_firebase
-from .outbox_relay import process_outbox_once
+from .firebase_client import init_firebase, get_db
+from .outbox_relay import process_outbox_once, send_push_to_token
 
 app = FastAPI(title="KotlinMassage Push Relay")
 
@@ -39,12 +40,56 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/flush")
-def flush(x_flush_token: str = Header(default="")):
+def _check_token(x_flush_token: str) -> None:
     if FLUSH_TOKEN and x_flush_token != FLUSH_TOKEN:
         raise HTTPException(status_code=403, detail="bad token")
+
+
+@app.post("/flush")
+def flush(x_flush_token: str = Header(default="")):
+    _check_token(x_flush_token)
     n = process_outbox_once()
     return {"processed": n}
+
+
+class TestPushRequest(BaseModel):
+    token: str
+    title: str = "Test"
+    body: str = "test push from curl"
+
+
+@app.post("/test_push")
+def test_push(req: TestPushRequest, x_flush_token: str = Header(default="")):
+    """Прямая отправка FCM на переданный токен, минуя БД. Для диагностики."""
+    _check_token(x_flush_token)
+    return send_push_to_token(req.token, req.title, req.body)
+
+
+@app.get("/device_tokens")
+def device_tokens(x_flush_token: str = Header(default="")):
+    """Список токенов устройств из user-tokens (для диагностики)."""
+    _check_token(x_flush_token)
+    tokens = get_db().child("user-tokens").get() or {}
+    return {uid: list(devs.values()) for uid, devs in tokens.items()}
+
+
+@app.get("/debug_state")
+def debug_state(x_flush_token: str = Header(default="")):
+    """Состояние outbox: сколько сообщений и какие статусы (для диагностики)."""
+    _check_token(x_flush_token)
+    outbox = get_db().child("outbox").get() or {}
+    summary = []
+    for msg_id, msg in outbox.items():
+        if not isinstance(msg, dict):
+            continue
+        summary.append({
+            "id": msg_id,
+            "to": msg.get("to"),
+            "sent": msg.get("sent"),
+            "skipped": msg.get("skipped"),
+            "timestamp": msg.get("timestamp"),
+        })
+    return {"count": len(summary), "messages": summary[-50:]}
 
 
 def run_polling_loop(interval: int = 5) -> None:

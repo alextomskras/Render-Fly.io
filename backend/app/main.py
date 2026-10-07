@@ -49,7 +49,10 @@ def _check_token(x_flush_token: str) -> None:
 def flush(x_flush_token: str = Header(default="")):
     _check_token(x_flush_token)
     n = process_outbox_once()
-    return {"processed": n}
+    # last_report — что произошло с КАЖДЫМ unsent-сообщением за этот проход:
+    # sent / NO_TOKENS_OR_SEND_FAILED / no-recipient / expired / malformed
+    return {"processed": n,
+            "report": getattr(process_outbox_once, "last_report", [])}
 
 
 class TestPushRequest(BaseModel):

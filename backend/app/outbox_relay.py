@@ -31,6 +31,7 @@ def process_outbox_once(max_age_seconds: int = 86400 * 365) -> int:
 
     processed = 0
     now_ms = int(time.time() * 1000)
+    report = []
 
     for msg_id, msg in pending.items():
         if not isinstance(msg, dict):
@@ -44,12 +45,14 @@ def process_outbox_once(max_age_seconds: int = 86400 * 365) -> int:
         if ts < 10_000_000_000:
             ts *= 1000
         if now_ms - ts > max_age_seconds * 1000:
+            report.append({"id": msg_id, "result": "expired"})
             outbox.child(msg_id).update({"sent": True, "skipped": "expired"})
             continue
 
         to_username = msg.get("to")
         from_uid = msg.get("fromId")
         if not to_username or not from_uid:
+            report.append({"id": msg_id, "result": "malformed"})
             outbox.child(msg_id).update({"sent": True, "skipped": "malformed"})
             continue
 
@@ -61,10 +64,13 @@ def process_outbox_once(max_age_seconds: int = 86400 * 365) -> int:
             recipient_uid = next(iter(user_node.keys()))
         if not recipient_uid:
             # помечаем: пользователь не найден, повторять бессмысленно
+            report.append({"id": msg_id, "to": to_username, "result": "no-recipient"})
             outbox.child(msg_id).update({"sent": True, "skipped": "no-recipient"})
             continue
 
         sent_ok = send_push(recipient_uid, msg)
+        report.append({"id": msg_id, "to": to_username,
+                       "result": "sent" if sent_ok else "NO_TOKENS_OR_SEND_FAILED"})
 
         # записываем статус в зеркало собеседника, чтобы клиент видел "доставлено"
         status_path = f"user-messages/{recipient_uid}/{from_uid}/{msg_id}/delivered"
@@ -76,6 +82,7 @@ def process_outbox_once(max_age_seconds: int = 86400 * 365) -> int:
         outbox.child(msg_id).update({"sent": True})
         processed += 1
 
+    process_outbox_once.last_report = report
     return processed
 
 

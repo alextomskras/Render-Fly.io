@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from .firebase_client import init_firebase, get_db
 from .outbox_relay import process_outbox_once, send_push_to_token
+from .transfer_cleanup import cleanup_transfers_once
 
 app = FastAPI(title="KotlinMassage Push Relay")
 
@@ -148,6 +149,15 @@ def inspect_outbox(x_flush_token: str = Header(default="")):
         })
     return {"pending_or_recent": report}
 
+
+
+@app.post("/cleanup_transfers")
+def cleanup_transfers(x_flush_token: str = Header(default="")):
+    """Автоочистка relay-зоны картинок /transfers (TTL 7 дней или все скачали).
+    Гонять cron'ом раз в час."""
+    if FLUSH_TOKEN and x_flush_token != FLUSH_TOKEN:
+        raise HTTPException(status_code=403, detail="bad token")
+    return cleanup_transfers_once()
 
 def run_polling_loop(interval: int = 5) -> None:
     """Простой polling-режим: каждые N секунд проверяем outbox."""

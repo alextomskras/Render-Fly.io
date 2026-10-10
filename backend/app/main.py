@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from .firebase_client import init_firebase, get_db
 from .outbox_relay import process_outbox_once, send_push_to_token
+from .read_relay import process_read_status_once
 from .transfer_cleanup import cleanup_transfers_once
 
 app = FastAPI(title="KotlinMassage Push Relay")
@@ -49,11 +50,18 @@ def _check_token(x_flush_token: str) -> None:
 @app.post("/flush")
 def flush(x_flush_token: str = Header(default="")):
     _check_token(x_flush_token)
+    # read-receipt релей гоняем тем же cron-ударом: дёшево и без второго расписания
+    read_stats = None
+    try:
+        read_stats = process_read_status_once()
+    except Exception as e:
+        print(f"[flush] read-relay error: {e}")
     n = process_outbox_once()
     # last_report — что произошло с КАЖДЫМ unsent-сообщением за этот проход:
     # sent / NO_TOKENS_OR_SEND_FAILED / no-recipient / expired / malformed
     return {"processed": n,
-            "report": getattr(process_outbox_once, "last_report", [])}
+            "report": getattr(process_outbox_once, "last_report", []),
+            "read_relay": read_stats}
 
 
 class TestPushRequest(BaseModel):
@@ -149,6 +157,29 @@ def inspect_outbox(x_flush_token: str = Header(default="")):
         })
     return {"pending_or_recent": report}
 
+
+
+@app.post("/flush_read_status")
+def flush_read_status(x_flush_token: str = Header(default="")):
+    """Релей read-receipt: копирует /chat-read-status/{chatId}/{readerUid}
+    в mirror_{peerUid} того же диалога (клиент-отправитель слушает зеркало)."""
+    _check_token(x_flush_token)
+    return process_read_status_once()
+
+
+@app.get("/debug_read_status")
+def debug_read_status(x_flush_token: str = Header(default="")):
+    """Состояние зоны статусов прочтения (для диагностики галочек)."""
+    _check_token(x_flush_token)
+    try:
+        raw = get_db().child("chat-read-status").get() or {}
+    except Exception:
+        raw = {}
+    out = []
+    for chat_id, nodes in list(raw.items())[-20:]:
+        if isinstance(nodes, dict):
+            out.append({"chatId": chat_id, "nodes": {k: v for k, v in nodes.items()}})
+    return {"chats": len(out), "detail": out}
 
 
 @app.post("/cleanup_transfers")

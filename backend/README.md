@@ -74,3 +74,24 @@ updates["outbox/$msgId"] = mapOf(
 ## Тестирование логики без сети
 Юнит-прогон с моками подтвердил полный цикл: поиск uid по username → send_each с
 title/body/data/channel=chat/priority=high → SET delivered → UPDATE outbox sent=true.
+
+## Read receipts (галки «прочитано») — read_relay.py
+
+Схема «Вариант А»: клиент пишет receipt только в СВОЙ узел
+`/chat-read-status/{chatId}/{readerUid}` = {ts, msgId} (правила RTDB это
+разрешают без admin-прав). Собеседник читать чужой узел НЕ может — поэтому
+релей копирует самый свежий receipt в служебный дочерний узел:
+
+    /chat-read-status/{chatId}/{readerUid}/mirror = {ts, msgId, by}
+
+Правила БД (app/database-rules.json Android-репозитория): `mirror` доступен на
+чтение всем, кроме самого читателя, и записывается только релеем (admin).
+Клиент-отправитель слушает `mirror` собеседника (DbPaths.chatReadMirror) и
+красит две синие галки.
+
+Запуск:
+- web-режим (Render free + cron-job.org): `/flush` уже дёргает read-релей тем
+  же ударом раз в минуту; отдельно есть `POST /flush_read_status` и диагностика
+  `GET /debug_read_status`;
+- worker-режим: подписка child_added/changed на `chat-read-status` — зеркало
+  обновляется мгновенно, плюс фолбэк-поллинг раз в минуту.

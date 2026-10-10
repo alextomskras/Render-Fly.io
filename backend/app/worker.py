@@ -7,6 +7,7 @@ from firebase_admin import db as rtdb
 
 from .firebase_client import init_firebase
 from .outbox_relay import process_outbox_once, send_push
+from .read_relay import process_read_status_once, mirror_receipt
 
 
 def main() -> None:
@@ -46,11 +47,37 @@ def main() -> None:
 
     ref.add_childEventListener("child_added", on_child_added)
 
+    # мгновенное зеркало read-receipt: /chat-read-status/{chatId}/{readerUid}
+    status_ref = rtdb.reference("chat-read-status")
+
+    def on_status_written(context):
+        path = [x for x in context["path"].lstrip("/").split("/") if x]
+        if len(path) != 2:  # только узлы читателя {chatId}/{readerUid}
+            return
+        chat_id, reader_uid = path
+        payload = context["data"] or {}
+        if not isinstance(payload, dict) or not payload.get("msgId"):
+            return
+        try:
+            mirror_receipt(chat_id, reader_uid, payload)
+        except Exception as e:
+            print(f"[worker] mirror_receipt failed: {e}")
+
+    status_ref.add_childEventListener("child_changed", on_status_written)
+    status_ref.add_childEventListener("child_added", on_status_written)
+
+    from .transfer_cleanup import integrate_cron as transfers_cron
+    transfers_cron(3600)
+
     # fallback: раз в минуту полная проверка (на случай обрыва подписки)
     try:
         while True:
             time.sleep(60)
             process_outbox_once()
+            try:
+                process_read_status_once()
+            except Exception as e:
+                print(f"[worker] read-relay error: {e}")
     except KeyboardInterrupt:
         print("[worker] stopped")
 
